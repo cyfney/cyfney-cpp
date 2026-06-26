@@ -30,25 +30,6 @@
 #include <freertos/task.h>
 #endif
 
-#if defined(ARDUINO_ARCH_AVR)
-#define CLOGGER_MILLIS() (millis())
-#define CLOGGER_LOG_SINK(message, length) (Serial.write(message, length))
-#ifndef CLOGGER_BUFFER_SIZE
-#define CLOGGER_BUFFER_SIZE (128)
-#endif
-#elif defined(ARDUINO_ARCH_ESP32)
-#define CLOGGER_MILLIS() (pdTICKS_TO_MS(xTaskGetTickCount()))
-#define CLOGGER_LOG_SINK(message, length) (fwrite(message, 1, length, stdout))
-#ifndef CLOGGER_BUFFER_SIZE
-#define CLOGGER_BUFFER_SIZE (512)
-#endif
-#else  // default to standard C++ behavior for non-AVR/ESP32 platforms
-#define CLOGGER_LOG_SINK(message, length) (Serial.write(message, length))
-#ifndef CLOGGER_BUFFER_SIZE
-#define CLOGGER_BUFFER_SIZE (256)
-#endif
-#endif
-
 #if __cplusplus >= 201703L
 #define CLOGGER_NOEXCEPT noexcept
 #else
@@ -68,8 +49,8 @@ constexpr inline size_t ExtractFileNameOffset(const T (&file_path)[size], size_t
 using MillisSource = uint32_t (*)() CLOGGER_NOEXCEPT;
 
 inline MillisSource& millis_source() CLOGGER_NOEXCEPT {
-  static MillisSource s_func = nullptr;
-  return s_func;
+  static MillisSource s_millis_source = nullptr;
+  return s_millis_source;
 }
 
 inline void set_millis_source(MillisSource func) CLOGGER_NOEXCEPT {
@@ -80,8 +61,8 @@ inline void set_millis_source(MillisSource func) CLOGGER_NOEXCEPT {
 using LogSink = void (*)(const char* message, size_t length) CLOGGER_NOEXCEPT;
 
 inline LogSink& log_sink() CLOGGER_NOEXCEPT {
-  static LogSink s_func = nullptr;
-  return s_func;
+  static LogSink s_log_sink = nullptr;
+  return s_log_sink;
 }
 
 inline void set_log_sink(LogSink func) CLOGGER_NOEXCEPT {
@@ -89,17 +70,34 @@ inline void set_log_sink(LogSink func) CLOGGER_NOEXCEPT {
   log_sink() = func;
 }
 
+inline size_t& format_buffer_size() CLOGGER_NOEXCEPT {
+#if defined(ARDUINO_ARCH_AVR)
+  static size_t s_format_buffer_size = 128;  // Default buffer size
+#else
+  static size_t s_format_buffer_size = 512;  // Default buffer size
+#endif
+  return s_format_buffer_size;
+}
+
+inline void set_format_buffer_size(size_t size) CLOGGER_NOEXCEPT {
+  assert(size > 0);  // Ensure the buffer size is within a reasonable range
+  format_buffer_size() = size;
+}
+
 inline void FormatTimestamp(char* buffer) CLOGGER_NOEXCEPT {
   constexpr int kShiftBits = 28;
   constexpr uint32_t kTimeMask = (uint32_t{1} << kShiftBits) - 1;
 
   const uint32_t raw_millis = millis_source() ? millis_source()() :
-#if defined(CLOGGER_MILLIS)
-                                              CLOGGER_MILLIS()
+#if defined(ARDUINO_ARCH_AVR)
+                                              millis()
+#elif defined(ARDUINO_ARCH_ESP32)
+                                              pdTICKS_TO_MS(xTaskGetTickCount())
 #else
                                               0
 #endif
       ;
+
   const uint32_t milliseconds_in_range = raw_millis & kTimeMask;
 
   const uint32_t milliseconds = milliseconds_in_range % 1000;
@@ -130,8 +128,9 @@ inline void FormatTimestamp(char* buffer) CLOGGER_NOEXCEPT {
 }
 
 inline void Log(const char* fmt, ...) CLOGGER_NOEXCEPT {
-  char buffer[CLOGGER_BUFFER_SIZE];
   constexpr size_t kTimeStrSize = 13;
+  char buffer[format_buffer_size()];
+
   FormatTimestamp(buffer);
 
   va_list args;
@@ -141,14 +140,15 @@ inline void Log(const char* fmt, ...) CLOGGER_NOEXCEPT {
 
   if (log_sink()) {
     log_sink()(buffer, length);
-  }
-#if defined(CLOGGER_LOG_SINK)
-  else {
-    CLOGGER_LOG_SINK(buffer, length);
-  }
+  } else {
+#if defined(ARDUINO_ARCH_AVR)
+    Serial.write(buffer, length);
+#else
+    fwrite(buffer, 1, length, stdout);
 #endif
+  }
 }
-};  // namespace logger
+}  // namespace logger
 }  // namespace core
 }  // namespace cfyney
 

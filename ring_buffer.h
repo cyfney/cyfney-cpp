@@ -19,7 +19,9 @@ class RingBuffer {
   static_assert(std::is_trivially_copyable_v<T>, "RingBuffer requires trivially copyable type");
 
  public:
-  constexpr explicit RingBuffer(const size_t capacity) noexcept : capacity_(RoundUpToPowerOfTwo(capacity + 1) - 1) { assert(capacity_ > 0); }
+  constexpr explicit RingBuffer(const size_t capacity) noexcept : capacity_(RoundUpToPowerOfTwo(capacity + 1) - 1) {
+    assert(capacity_ > 0);
+  }
 
   ~RingBuffer() noexcept { delete[] buffer_; }
 
