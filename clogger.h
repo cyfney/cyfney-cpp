@@ -14,14 +14,19 @@
 #define CLOGGER_SEVERITY (CLOGGER_SEVERITY_INFO)
 #endif
 
-#if defined(ARDUINO_ARCH_AVR)
+#if defined(ARDUINO) && !defined(ARDUINO_ARCH_ESP32)
 #include <Arduino.h>
+#endif
+
+#if defined(ARDUINO_ARCH_AVR)
 #include <assert.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
-#else  // default to standard C++ headers for non-AVR platforms
+#else
 #include <cassert>
 #include <cstdarg>
+#include <cstdint>
 #include <cstdio>
 #endif
 
@@ -53,9 +58,9 @@ inline MillisSource& millis_source() CLOGGER_NOEXCEPT {
   return s_millis_source;
 }
 
-inline void set_millis_source(MillisSource func) CLOGGER_NOEXCEPT {
+inline void set_millis_source(MillisSource source) CLOGGER_NOEXCEPT {
   assert(millis_source() == nullptr);  // Ensure it's set only once
-  millis_source() = func;
+  millis_source() = source;
 }
 
 using LogSink = void (*)(const char* message, size_t length) CLOGGER_NOEXCEPT;
@@ -65,9 +70,9 @@ inline LogSink& log_sink() CLOGGER_NOEXCEPT {
   return s_log_sink;
 }
 
-inline void set_log_sink(LogSink func) CLOGGER_NOEXCEPT {
+inline void set_log_sink(LogSink sink) CLOGGER_NOEXCEPT {
   assert(log_sink() == nullptr);  // Ensure it's set only once
-  log_sink() = func;
+  log_sink() = sink;
 }
 
 inline size_t& format_buffer_size() CLOGGER_NOEXCEPT {
@@ -89,10 +94,10 @@ inline void FormatTimestamp(char* buffer) CLOGGER_NOEXCEPT {
   constexpr uint32_t kTimeMask = (uint32_t{1} << kShiftBits) - 1;
 
   const uint32_t raw_millis = millis_source() ? millis_source()() :
-#if defined(ARDUINO_ARCH_AVR)
-                                              millis()
-#elif defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32)
                                               pdTICKS_TO_MS(xTaskGetTickCount())
+#elif defined(ARDUINO)
+                                              millis()
 #else
                                               0
 #endif
@@ -124,24 +129,29 @@ inline void FormatTimestamp(char* buffer) CLOGGER_NOEXCEPT {
   buffer[9] = '0' + milliseconds / 100;
   buffer[10] = '0' + (milliseconds / 10) % 10;
   buffer[11] = '0' + milliseconds % 10;
-  buffer[12] = '\0';
 }
 
 inline void Log(const char* fmt, ...) CLOGGER_NOEXCEPT {
-  constexpr size_t kTimeStrSize = 13;
+  constexpr size_t kTimestampSize = 12;
   char buffer[format_buffer_size()];
-
   FormatTimestamp(buffer);
 
   va_list args;
   va_start(args, fmt);
-  [[maybe_unused]] size_t length = vsnprintf(buffer + kTimeStrSize, sizeof(buffer) - kTimeStrSize, fmt, args) + kTimeStrSize;
+  auto length = vsnprintf(buffer + kTimestampSize, sizeof(buffer) - kTimestampSize, fmt, args) + kTimestampSize;
   va_end(args);
+
+  if (length >= sizeof(buffer)) {
+    length = sizeof(buffer);
+    buffer[format_buffer_size() - 1] = '\n';
+  }
 
   if (log_sink()) {
     log_sink()(buffer, length);
   } else {
-#if defined(ARDUINO_ARCH_AVR)
+#if defined(ARDUINO_ARCH_ESP32)
+    fwrite(buffer, 1, length, stdout);
+#elif defined(ARDUINO)
     Serial.write(buffer, length);
 #else
     fwrite(buffer, 1, length, stdout);
