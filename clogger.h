@@ -51,7 +51,7 @@ constexpr inline size_t ExtractFileNameOffset(const T (&file_path)[size], size_t
   return (i == 0) ? 0 : (file_path[i - 1] == '/' || file_path[i - 1] == '\\') ? i : ExtractFileNameOffset(file_path, i - 1);
 }
 
-using MillisSource = uint32_t (*)() CLOGGER_NOEXCEPT;
+using MillisSource = uint32_t (*)();
 
 inline MillisSource& millis_source() CLOGGER_NOEXCEPT {
   static MillisSource s_millis_source = nullptr;
@@ -63,7 +63,7 @@ inline void set_millis_source(MillisSource source) CLOGGER_NOEXCEPT {
   millis_source() = source;
 }
 
-using LogSink = void (*)(const char* message, size_t length) CLOGGER_NOEXCEPT;
+using LogSink = void (*)(const char* message, size_t length);
 
 inline LogSink& log_sink() CLOGGER_NOEXCEPT {
   static LogSink s_log_sink = nullptr;
