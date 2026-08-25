@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef CFYNEY_CORE_RING_BUFFER_H
-#define CFYNEY_CORE_RING_BUFFER_H
+#ifndef CFY_RING_BUFFER_H
+#define CFY_RING_BUFFER_H
 
 #include <cassert>
 #include <cstddef>
@@ -12,8 +12,7 @@
 #include <bit>
 #endif
 
-namespace cfyney {
-namespace core {
+namespace cfy {
 template <typename T>
 class RingBuffer {
   static_assert(std::is_trivially_copyable_v<T>, "RingBuffer requires trivially copyable type");
@@ -167,10 +166,8 @@ class RingBuffer {
 
   size_t capacity_ = 0;
   T* buffer_ = nullptr;
-  volatile size_t read_pos_ = 0;
-  volatile size_t write_pos_ = 0;
+  size_t read_pos_ = 0;
+  size_t write_pos_ = 0;
 };
-
-}  // namespace core
-}  // namespace cfyney
+}  // namespace cfy
 #endif
