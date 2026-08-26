@@ -12,7 +12,7 @@
 namespace cyf {
 template <typename T>
 class RingBufferView {
-  static_assert(std::is_trivially_copyable_v<T>, "RingBufferView requires trivially copyable type");
+  static_assert(std::is_trivially_copyable<T>::value, "RingBufferView requires trivially copyable type");
 
  public:
   constexpr explicit RingBufferView(T* buffer, size_t capacity) noexcept : buffer_(buffer), capacity_mask_(capacity - 1) {
