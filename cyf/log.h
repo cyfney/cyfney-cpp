@@ -1,17 +1,17 @@
 #pragma once
 
-#ifndef CFY_LOG_H
-#define CFY_LOG_H
+#ifndef CYF_LOG_H
+#define CYF_LOG_H
 
-#define CFY_LOG_SEVERITY_VERBOSE (1)
-#define CFY_LOG_SEVERITY_DEBUG (2)
-#define CFY_LOG_SEVERITY_INFO (3)
-#define CFY_LOG_SEVERITY_WARN (4)
-#define CFY_LOG_SEVERITY_ERROR (5)
-#define CFY_LOG_SEVERITY_NONE (6)
+#define CYF_LOG_SEVERITY_VERBOSE (1)
+#define CYF_LOG_SEVERITY_DEBUG (2)
+#define CYF_LOG_SEVERITY_INFO (3)
+#define CYF_LOG_SEVERITY_WARN (4)
+#define CYF_LOG_SEVERITY_ERROR (5)
+#define CYF_LOG_SEVERITY_NONE (6)
 
-#ifndef CFY_LOG_SEVERITY
-#define CFY_LOG_SEVERITY (CFY_LOG_SEVERITY_INFO)
+#ifndef CYF_LOG_SEVERITY
+#define CYF_LOG_SEVERITY (CYF_LOG_SEVERITY_INFO)
 #endif
 
 #if defined(ARDUINO) && !defined(ARDUINO_ARCH_ESP32)
@@ -36,45 +36,45 @@
 #endif
 
 #if __cplusplus >= 201703L
-#define CFY_LOG_NOEXCEPT noexcept
+#define CYF_LOG_NOEXCEPT noexcept
 #else
-#define CFY_LOG_NOEXCEPT
+#define CYF_LOG_NOEXCEPT
 #endif
 
 static_assert(__cplusplus >= 201103L, "This project requires C++11 standard");
 
-namespace cfy {
+namespace cyf {
 namespace log {
 template <typename T, size_t size>
-constexpr inline size_t ExtractFileNameOffset(const T (&file_path)[size], size_t i = size) CFY_LOG_NOEXCEPT {
+constexpr inline size_t ExtractFileNameOffset(const T (&file_path)[size], size_t i = size) CYF_LOG_NOEXCEPT {
   return (i == 0) ? 0 : (file_path[i - 1] == '/' || file_path[i - 1] == '\\') ? i : ExtractFileNameOffset(file_path, i - 1);
 }
 
 using MillisSource = uint32_t (*)();
 
-inline MillisSource& millis_source() CFY_LOG_NOEXCEPT {
+inline MillisSource& millis_source() CYF_LOG_NOEXCEPT {
   static MillisSource s_millis_source = nullptr;
   return s_millis_source;
 }
 
-inline void set_millis_source(MillisSource source) CFY_LOG_NOEXCEPT {
+inline void set_millis_source(MillisSource source) CYF_LOG_NOEXCEPT {
   assert(millis_source() == nullptr);  // Ensure it's set only once
   millis_source() = source;
 }
 
 using LogSink = void (*)(const char* message, size_t length);
 
-inline LogSink& log_sink() CFY_LOG_NOEXCEPT {
+inline LogSink& log_sink() CYF_LOG_NOEXCEPT {
   static LogSink s_log_sink = nullptr;
   return s_log_sink;
 }
 
-inline void set_log_sink(LogSink sink) CFY_LOG_NOEXCEPT {
+inline void set_log_sink(LogSink sink) CYF_LOG_NOEXCEPT {
   assert(log_sink() == nullptr);  // Ensure it's set only once
   log_sink() = sink;
 }
 
-inline size_t& format_buffer_size() CFY_LOG_NOEXCEPT {
+inline size_t& format_buffer_size() CYF_LOG_NOEXCEPT {
 #if defined(ARDUINO_ARCH_AVR)
   static size_t s_format_buffer_size = 128;  // Default buffer size
 #else
@@ -83,12 +83,12 @@ inline size_t& format_buffer_size() CFY_LOG_NOEXCEPT {
   return s_format_buffer_size;
 }
 
-inline void set_format_buffer_size(size_t size) CFY_LOG_NOEXCEPT {
+inline void set_format_buffer_size(size_t size) CYF_LOG_NOEXCEPT {
   assert(size > 0);  // Ensure the buffer size is within a reasonable range
   format_buffer_size() = size;
 }
 
-inline void FormatTimestamp(char* buffer) CFY_LOG_NOEXCEPT {
+inline void FormatTimestamp(char* buffer) CYF_LOG_NOEXCEPT {
   constexpr int kShiftBits = 28;
   constexpr uint32_t kTimeMask = (uint32_t{1} << kShiftBits) - 1;
 
@@ -130,7 +130,7 @@ inline void FormatTimestamp(char* buffer) CFY_LOG_NOEXCEPT {
   buffer[11] = '0' + milliseconds % 10;
 }
 
-inline void Log(const char* fmt, ...) CFY_LOG_NOEXCEPT {
+inline void Log(const char* fmt, ...) CYF_LOG_NOEXCEPT {
   constexpr size_t kTimestampSize = 12;
   char buffer[format_buffer_size()];
   FormatTimestamp(buffer);
@@ -160,41 +160,41 @@ inline void Log(const char* fmt, ...) CFY_LOG_NOEXCEPT {
 }  // namespace log
 }  // namespace cfy
 
-#if CFY_LOG_SEVERITY <= CFY_LOG_SEVERITY_VERBOSE
+#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_VERBOSE
 #define CLOGV(fmt, ...)                                                                                                 \
-  cfy::log::Log(" V %s:%d %s] " fmt "\n", __FILE__ + cfy::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
+  cyf::log::Log(" V %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
                 ##__VA_ARGS__)
 #else
 #define CLOGV(fmt, ...) (void(0))
 #endif
 
-#if CFY_LOG_SEVERITY <= CFY_LOG_SEVERITY_DEBUG
+#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_DEBUG
 #define CLOGD(fmt, ...)                                                                                                 \
-  cfy::log::Log(" D %s:%d %s] " fmt "\n", __FILE__ + cfy::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
+  cyf::log::Log(" D %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
                 ##__VA_ARGS__)
 #else
 #define CLOGD(fmt, ...) (void(0))
 #endif
 
-#if CFY_LOG_SEVERITY <= CFY_LOG_SEVERITY_INFO
+#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_INFO
 #define CLOGI(fmt, ...)                                                                                                 \
-  cfy::log::Log(" I %s:%d %s] " fmt "\n", __FILE__ + cfy::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
+  cyf::log::Log(" I %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
                 ##__VA_ARGS__)
 #else
 #define CLOGI(fmt, ...) (void(0))
 #endif
 
-#if CFY_LOG_SEVERITY <= CFY_LOG_SEVERITY_WARN
+#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_WARN
 #define CLOGW(fmt, ...)                                                                                                 \
-  cfy::log::Log(" W %s:%d %s] " fmt "\n", __FILE__ + cfy::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
+  cyf::log::Log(" W %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
                 ##__VA_ARGS__)
 #else
 #define CLOGW(fmt, ...) (void(0))
 #endif
 
-#if CFY_LOG_SEVERITY <= CFY_LOG_SEVERITY_ERROR
+#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_ERROR
 #define CLOGE(fmt, ...)                                                                                                 \
-  cfy::log::Log(" E %s:%d %s] " fmt "\n", __FILE__ + cfy::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
+  cyf::log::Log(" E %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
                 ##__VA_ARGS__)
 #else
 #define CLOGE(fmt, ...) (void(0))
