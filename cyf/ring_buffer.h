@@ -145,8 +145,8 @@ class RingBufferView {
     return count;
   }
 
-  T* buffer_ = nullptr;
-  size_t capacity_mask_ = 0;
+  T* const buffer_ = nullptr;
+  const size_t capacity_mask_ = 0;
   size_t read_pos_ = 0;
   size_t write_pos_ = 0;
 };
