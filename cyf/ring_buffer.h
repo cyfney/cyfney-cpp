@@ -3,6 +3,7 @@
 #ifndef CYF_RING_BUFFER_H
 #define CYF_RING_BUFFER_H
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstring>
@@ -159,5 +160,5 @@ class RingBuffer : public RingBufferView<T> {
  private:
   T buffer_[N];
 };
-}  // namespace cfy
+}  // namespace cyf
 #endif
