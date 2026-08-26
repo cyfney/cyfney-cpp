@@ -35,46 +35,40 @@
 #include <freertos/task.h>
 #endif
 
-#if __cplusplus >= 201703L
-#define CYF_LOG_NOEXCEPT noexcept
-#else
-#define CYF_LOG_NOEXCEPT
-#endif
-
 static_assert(__cplusplus >= 201103L, "This project requires C++11 standard");
 
 namespace cyf {
 namespace log {
 template <typename T, size_t size>
-constexpr inline size_t ExtractFileNameOffset(const T (&file_path)[size], size_t i = size) CYF_LOG_NOEXCEPT {
+constexpr inline size_t ExtractFileNameOffset(const T (&file_path)[size], size_t i = size) noexcept {
   return (i == 0) ? 0 : (file_path[i - 1] == '/' || file_path[i - 1] == '\\') ? i : ExtractFileNameOffset(file_path, i - 1);
 }
 
 using MillisSource = uint32_t (*)();
 
-inline MillisSource& millis_source() CYF_LOG_NOEXCEPT {
+inline MillisSource& millis_source() noexcept {
   static MillisSource s_millis_source = nullptr;
   return s_millis_source;
 }
 
-inline void set_millis_source(MillisSource source) CYF_LOG_NOEXCEPT {
+inline void set_millis_source(MillisSource source) noexcept {
   assert(millis_source() == nullptr);  // Ensure it's set only once
   millis_source() = source;
 }
 
 using LogSink = void (*)(const char* message, size_t length);
 
-inline LogSink& log_sink() CYF_LOG_NOEXCEPT {
+inline LogSink& log_sink() noexcept {
   static LogSink s_log_sink = nullptr;
   return s_log_sink;
 }
 
-inline void set_log_sink(LogSink sink) CYF_LOG_NOEXCEPT {
+inline void set_log_sink(LogSink sink) noexcept {
   assert(log_sink() == nullptr);  // Ensure it's set only once
   log_sink() = sink;
 }
 
-inline size_t& format_buffer_size() CYF_LOG_NOEXCEPT {
+inline size_t& format_buffer_size() noexcept {
 #if defined(ARDUINO_ARCH_AVR)
   static size_t s_format_buffer_size = 128;  // Default buffer size
 #else
@@ -83,12 +77,12 @@ inline size_t& format_buffer_size() CYF_LOG_NOEXCEPT {
   return s_format_buffer_size;
 }
 
-inline void set_format_buffer_size(size_t size) CYF_LOG_NOEXCEPT {
+inline void set_format_buffer_size(size_t size) noexcept {
   assert(size > 0);  // Ensure the buffer size is within a reasonable range
   format_buffer_size() = size;
 }
 
-inline void FormatTimestamp(char* buffer) CYF_LOG_NOEXCEPT {
+inline void FormatTimestamp(char* buffer) noexcept {
   constexpr int kShiftBits = 28;
   constexpr uint32_t kTimeMask = (uint32_t{1} << kShiftBits) - 1;
 
@@ -130,7 +124,7 @@ inline void FormatTimestamp(char* buffer) CYF_LOG_NOEXCEPT {
   buffer[11] = '0' + milliseconds % 10;
 }
 
-inline void Log(const char* fmt, ...) CYF_LOG_NOEXCEPT {
+inline void Log(const char* fmt, ...) noexcept {
   constexpr size_t kTimestampSize = 12;
   char buffer[format_buffer_size()];
   FormatTimestamp(buffer);
@@ -158,7 +152,7 @@ inline void Log(const char* fmt, ...) CYF_LOG_NOEXCEPT {
   }
 }
 }  // namespace log
-}  // namespace cfy
+}  // namespace cyf
 
 #if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_VERBOSE
 #define CLOGV(fmt, ...)                                                                                                 \
