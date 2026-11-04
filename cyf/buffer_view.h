@@ -3,11 +3,8 @@
 #ifndef CYF_BUFFER_VIEW_H_
 #define CYF_BUFFER_VIEW_H_
 
+#include <stddef.h>
 #include <stdint.h>
-
-#if defined(ARDUINO)
-#include <Print.h>
-#endif
 
 namespace cyf {
 class BufferView {
@@ -16,9 +13,6 @@ class BufferView {
   const uint8_t* data() const noexcept { return data_; }
   size_t length() const noexcept { return length_; }
   size_t size() const noexcept { return length_; }
-#if defined(ARDUINO)
-  size_t WriteTo(Print& print) const noexcept { return print.write(data_, length_); }
-#endif
 
  private:
   const uint8_t* data_;

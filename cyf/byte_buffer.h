@@ -8,10 +8,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if defined(ARDUINO)
-#include <Print.h>
-#endif
-
 namespace cyf {
 class ByteBuffer {
  public:
@@ -54,9 +50,6 @@ class ByteBuffer {
   uint8_t* data() noexcept { return buffer_; }
   const uint8_t* data() const noexcept { return buffer_; }
   size_t size() const noexcept { return size_; }
-#if defined(ARDUINO)
-  size_t WriteTo(Print& print) const noexcept { return print.write(buffer_, size_); }
-#endif
   const uint8_t& operator[](size_t pos) const noexcept { return *(buffer_ + pos); }
   uint8_t& operator[](size_t pos) noexcept { return *(buffer_ + pos); }
 
