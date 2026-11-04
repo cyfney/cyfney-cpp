@@ -22,7 +22,7 @@ namespace robust_frame {
  *
  * 每个字节最多转义为 2 字节，因此这是最坏情况下的长度上界。
  */
-constexpr size_t MaxEncodedLength(size_t data_length) noexcept {
+constexpr inline size_t MaxEncodedLength(size_t data_length) noexcept {
   return 1                    // header
          + (data_length + 1)  // payload + crc, 每个字节最多转义为 2 字节
                * 2 +
