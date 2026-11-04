@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef CYF_CRC8_H
-#define CYF_CRC8_H
+#ifndef CYF_CRC8_H_
+#define CYF_CRC8_H_
 
 #include <stddef.h>
 #include <stdint.h>

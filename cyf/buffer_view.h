@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef CYF_BUFFER_VIEW_H
-#define CYF_BUFFER_VIEW_H
+#ifndef CYF_BUFFER_VIEW_H_
+#define CYF_BUFFER_VIEW_H_
 
 #include <stdint.h>
 

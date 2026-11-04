@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef CYF_TIMED_MAJORITY_FILTER_H
-#define CYF_TIMED_MAJORITY_FILTER_H
+#ifndef CYF_TIMED_MAJORITY_FILTER_H_
+#define CYF_TIMED_MAJORITY_FILTER_H_
 
 #include <stdint.h>
 
@@ -105,4 +105,4 @@ class TimedMajorityFilter {
 };
 }  // namespace cyf
 
-#endif  // CYF_TIMED_MAJORITY_FILTER_H
+#endif  // CYF_TIMED_MAJORITY_FILTER_H_

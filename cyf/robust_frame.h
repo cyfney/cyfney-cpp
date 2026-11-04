@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef CYF_ROBUST_FRAME_H
-#define CYF_ROBUST_FRAME_H
+#ifndef CYF_ROBUST_FRAME_H_
+#define CYF_ROBUST_FRAME_H_
 
 #include <assert.h>
 #include <stddef.h>

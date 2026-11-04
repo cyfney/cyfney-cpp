@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef CYF_HYSTERESIS_QUANTIZER_H
-#define CYF_HYSTERESIS_QUANTIZER_H
+#ifndef CYF_HYSTERESIS_QUANTIZER_H_
+#define CYF_HYSTERESIS_QUANTIZER_H_
 
 #include <assert.h>
 #include <stdint.h>
