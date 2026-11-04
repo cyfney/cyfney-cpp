@@ -12,11 +12,24 @@
 #endif
 
 #include "buffer_view.h"
-#include "byte_buffer.h"
 #include "crc8.h"
+#include "fixed_buffer.h"
 
 namespace cyf {
 namespace robust_frame {
+/**
+ * 编码后的最大字节数（帧头 + 转义后的载荷与 CRC + 帧尾）。
+ *
+ * 每个字节最多转义为 2 字节，因此这是最坏情况下的长度上界。
+ */
+constexpr size_t MaxEncodedLength(size_t data_length) noexcept {
+  return 1                    // header
+         + (data_length + 1)  // payload + crc, 每个字节最多转义为 2 字节
+               * 2 +
+         1  // footer
+      ;
+}
+
 namespace detail {
 /**
  * 帧头
@@ -61,69 +74,93 @@ inline void Escape(const uint8_t* data, size_t data_length, Stream& stream) {
   }
 }
 #endif
-
-inline size_t MaxSerializedLength(size_t data_length) noexcept {
-  return 1                    // header
-         + (data_length + 1)  // payload + crc, 每个字节最多转义为 2 字节
-               * 2 +
-         1  // footer
-      ;
-}
 }  // namespace detail
 
 #if defined(ARDUINO)
-inline void Serialize(const uint8_t* data, size_t length, Stream& stream) noexcept {
-  using namespace detail;
+inline void Encode(const uint8_t* data, size_t length, Stream& stream) noexcept {
   const uint8_t crc = crc8::Calculate(data, length);
-  stream.write(kFrameHeader);
-  Escape(data, length, stream);
-  Escape(&crc, 1, stream);
-  stream.write(kFrameFooter);
+  stream.write(detail::kFrameHeader);
+  detail::Escape(data, length, stream);
+  detail::Escape(&crc, 1, stream);
+  stream.write(detail::kFrameFooter);
 }
 #endif
 
-inline ByteBuffer Serialize(const uint8_t* data, size_t length) noexcept {
-  using namespace detail;
-  ByteBuffer buffer(MaxSerializedLength(length));
+/**
+ * 编码到调用者提供的缓冲区。
+ *
+ * @param data         载荷起始地址
+ * @param length       载荷字节数
+ * @param out_buffer   输出缓冲区，可用字节数不得小于 MaxEncodedLength(length)
+ * @param out_capacity 输出缓冲区可用字节数
+ * @return 实际写入的帧长度；data/out_buffer 为空或容量不足时返回 0
+ */
+inline size_t Encode(const uint8_t* data, size_t length, uint8_t* out_buffer, size_t out_capacity) noexcept {
+  if ((data == nullptr) || (out_buffer == nullptr) || (out_capacity < MaxEncodedLength(length))) {
+    return 0;
+  }
+
   size_t offset = 0;
   const uint8_t crc = crc8::Calculate(data, length);
 
-  buffer[offset++] = kFrameHeader;
-  Escape(data, length, buffer.data(), &offset);
-  Escape(&crc, 1, buffer.data(), &offset);
-  buffer[offset++] = kFrameFooter;
-  buffer.Resize(offset);
+  out_buffer[offset++] = detail::kFrameHeader;
+  detail::Escape(data, length, out_buffer, &offset);
+  detail::Escape(&crc, 1, out_buffer, &offset);
+  out_buffer[offset++] = detail::kFrameFooter;
+  return offset;
+}
+
+/**
+ * 编码到定长缓冲，缓冲随返回值分配在栈上，无动态内存。
+ *
+ * 返回值的 size() 即实际帧长度；data 为空指针或 length 超过 MaxPayloadSize
+ * 时返回 size() == 0 的空缓冲。
+ *
+ * @tparam MaxPayloadSize 允许的最大载荷字节数
+ */
+template <size_t MaxPayloadSize>
+inline FixedBuffer<uint8_t, MaxEncodedLength(MaxPayloadSize)> Encode(const uint8_t* data, size_t length) noexcept {
+  static_assert(MaxPayloadSize > 0, "Encode requires MaxPayloadSize > 0");
+  FixedBuffer<uint8_t, MaxEncodedLength(MaxPayloadSize)> buffer;
+  if (length > MaxPayloadSize) {
+    return buffer;
+  }
+  buffer.Resize(Encode(data, length, buffer.data(), MaxEncodedLength(MaxPayloadSize)));
   return buffer;
 }
 
-class Parser {
- public:
-  explicit Parser(size_t max_payload_size) noexcept
-      : max_payload_size_(max_payload_size),
-        data_(new uint8_t[max_payload_size + 1]  // +1 for CRC
-        ) {}
+/**
+ * robust_frame 帧解码器：按字节喂入串行字节流，还原转义、校验 CRC，
+ * 收齐一帧时返回载荷视图。
+ *
+ * @tparam MaxPayloadSize 最大载荷字节数（缓冲区实际为 MaxPayloadSize + 1，
+ *         额外 1 字节存放 CRC）。
+ */
+template <size_t MaxPayloadSize>
+class Decoder {
+  static_assert(MaxPayloadSize > 0, "Decoder requires MaxPayloadSize > 0");
 
-  ~Parser() noexcept { delete[] data_; }
+ public:
+  Decoder() noexcept = default;
 
   void Reset() noexcept {
     data_length_ = 0;
     state_ = State::kSyncHeader;
   }
 
-  BufferView Process(uint8_t byte) noexcept {
-    using namespace detail;
+  BufferView Decode(uint8_t byte) noexcept {
     switch (state_) {
       case State::kSyncHeader: {
         if (data_length_ != 0) {
           Reset();
         }
-        if (byte == kFrameHeader) {
+        if (byte == detail::kFrameHeader) {
           state_ = State::kCollectData;
         }
         break;
       }
       case State::kCollectData: {
-        if (byte == kFrameFooter) {
+        if (byte == detail::kFrameFooter) {
           constexpr size_t kMinUnescapedSize = 2;
           if (data_length_ >= kMinUnescapedSize) {
             const uint8_t received_crc = data_[data_length_ - 1];
@@ -135,10 +172,10 @@ class Parser {
             }
           }
           Reset();
-        } else if (byte == kFrameHeader || data_length_ == max_payload_size_ + 1) {
+        } else if (byte == detail::kFrameHeader || data_length_ == kDataSize) {
           Reset();
-          Process(byte);
-        } else if (byte == kEscapeChar) {
+          Decode(byte);
+        } else if (byte == detail::kEscapeChar) {
           state_ = State::kUnescape;
         } else {
           data_[data_length_++] = byte;
@@ -146,10 +183,11 @@ class Parser {
         break;
       }
       case State::kUnescape: {
-        const uint8_t unescaped_byte = static_cast<uint8_t>(byte ^ kXorEscape);
-        if (unescaped_byte != kFrameHeader && unescaped_byte != kFrameFooter && unescaped_byte != kEscapeChar) {
+        const uint8_t unescaped_byte = static_cast<uint8_t>(byte ^ detail::kXorEscape);
+        if (unescaped_byte != detail::kFrameHeader && unescaped_byte != detail::kFrameFooter &&
+            unescaped_byte != detail::kEscapeChar) {
           Reset();
-          Process(byte);
+          Decode(byte);
         } else {
           data_[data_length_++] = unescaped_byte;
           state_ = State::kCollectData;
@@ -158,7 +196,7 @@ class Parser {
       }
       case State::kFrameParsed: {
         Reset();
-        Process(byte);
+        Decode(byte);
         break;
       }
       default: {
@@ -176,13 +214,14 @@ class Parser {
     kFrameParsed,
   };
 
-  Parser(const Parser&) = delete;
-  Parser& operator=(const Parser&) = delete;
+  static constexpr size_t kDataSize = MaxPayloadSize + 1;  // +1 for CRC
 
-  const size_t max_payload_size_ = 0;
+  Decoder(const Decoder&) = delete;
+  Decoder& operator=(const Decoder&) = delete;
+
   State state_ = State::kSyncHeader;
-  uint8_t* const data_ = nullptr;
   size_t data_length_ = 0;
+  uint8_t data_[kDataSize] = {0};
 };
 
 }  // namespace robust_frame
