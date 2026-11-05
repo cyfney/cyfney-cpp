@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+#include "fixed_buffer.h"
+
 namespace cyf {
 // Accumulates distinct FrameType values (counted by equality) and, once at
 // least `timeout` time units have elapsed since the first sample of the
@@ -25,20 +27,15 @@ class TimedMajorityFilter {
       : timeout_(timeout), getter_(getter), min_count_(min_count) {}
 
   void Push(const FrameType& frame) {
-    for (uint8_t i = 0; i < distinct_; ++i) {
+    for (size_t i = 0; i < entries_.size(); ++i) {
       if (entries_[i].frame == frame) {
         entries_[i].count++;
         return;
       }
     }
 
-    if (distinct_ < MaxDistinct) {
-      entries_[distinct_].frame = frame;
-      entries_[distinct_].count = 1;
-      if (distinct_ == 0) {
-        last_time_ = getter_();
-      }
-      distinct_++;
+    if (entries_.PushBack({frame, 1}) && entries_.size() == 1) {
+      last_time_ = getter_();
     }
   }
 
@@ -49,7 +46,7 @@ class TimedMajorityFilter {
       return false;
     }
 
-    if (distinct_ == 0) {
+    if (entries_.empty()) {
       return false;
     }
 
@@ -59,30 +56,32 @@ class TimedMajorityFilter {
 
     uint16_t max_count = 0;
     uint16_t second_max = 0;
-    uint8_t best_idx = 0xFF;
+    bool has_best = false;
+    FrameType best{};
 
-    for (uint8_t i = 0; i < distinct_; ++i) {
-      uint16_t c = entries_[i].count;
+    for (size_t i = 0; i < entries_.size(); ++i) {
+      const uint16_t c = entries_[i].count;
       if (c > max_count) {
         second_max = max_count;
         max_count = c;
-        best_idx = i;
+        best = entries_[i].frame;
+        has_best = true;
       } else if (c > second_max) {
         second_max = c;
       }
     }
 
-    distinct_ = 0;
+    entries_.Clear();
 
-    if ((best_idx != 0xFF) && (max_count >= min_count_) && (max_count > second_max)) {
-      *out = entries_[best_idx].frame;
+    if (has_best && (max_count >= min_count_) && (max_count > second_max)) {
+      *out = best;
       return true;
     }
 
     return false;
   }
 
-  void Reset() { distinct_ = 0; }
+  void Reset() { entries_.Clear(); }
 
  private:
   TimedMajorityFilter(const TimedMajorityFilter&) = delete;
@@ -99,9 +98,8 @@ class TimedMajorityFilter {
   const TimeGetter getter_;
   const uint16_t min_count_;
 
-  uint8_t distinct_ = 0;
   TimeType last_time_ = TimeType{0};
-  Entry entries_[MaxDistinct];
+  FixedBuffer<Entry, MaxDistinct> entries_;
 };
 }  // namespace cyf
 

@@ -144,14 +144,14 @@ class Decoder {
   Decoder() noexcept = default;
 
   void Reset() noexcept {
-    data_length_ = 0;
+    buffer_.Clear();
     state_ = State::kSyncHeader;
   }
 
   BufferView Decode(uint8_t byte) noexcept {
     switch (state_) {
       case State::kSyncHeader: {
-        if (data_length_ != 0) {
+        if (!buffer_.empty()) {
           Reset();
         }
         if (byte == detail::kFrameHeader) {
@@ -162,23 +162,23 @@ class Decoder {
       case State::kCollectData: {
         if (byte == detail::kFrameFooter) {
           constexpr size_t kMinUnescapedSize = 2;
-          if (data_length_ >= kMinUnescapedSize) {
-            const uint8_t received_crc = data_[data_length_ - 1];
-            const uint8_t calculated_crc = crc8::Calculate(data_, data_length_ - 1);
+          if (buffer_.size() >= kMinUnescapedSize) {
+            const uint8_t received_crc = buffer_[buffer_.size() - 1];
+            const uint8_t calculated_crc = crc8::Calculate(buffer_.data(), buffer_.size() - 1);
             if (received_crc == calculated_crc) {
-              --data_length_;
+              buffer_.Resize(buffer_.size() - 1);
               state_ = State::kFrameParsed;
-              return {data_, data_length_};
+              return {buffer_.data(), buffer_.size()};
             }
           }
           Reset();
-        } else if (byte == detail::kFrameHeader || data_length_ == kDataSize) {
+        } else if (byte == detail::kFrameHeader || buffer_.full()) {
           Reset();
           Decode(byte);
         } else if (byte == detail::kEscapeChar) {
           state_ = State::kUnescape;
         } else {
-          data_[data_length_++] = byte;
+          buffer_.PushBack(byte);
         }
         break;
       }
@@ -188,8 +188,10 @@ class Decoder {
             unescaped_byte != detail::kEscapeChar) {
           Reset();
           Decode(byte);
+        } else if (!buffer_.PushBack(unescaped_byte)) {
+          Reset();
+          Decode(byte);
         } else {
-          data_[data_length_++] = unescaped_byte;
           state_ = State::kCollectData;
         }
         break;
@@ -220,8 +222,7 @@ class Decoder {
   Decoder& operator=(const Decoder&) = delete;
 
   State state_ = State::kSyncHeader;
-  size_t data_length_ = 0;
-  uint8_t data_[kDataSize] = {0};
+  FixedBuffer<uint8_t, kDataSize> buffer_;
 };
 
 }  // namespace robust_frame
