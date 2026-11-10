@@ -21,9 +21,9 @@ class FixedBuffer {
   static_assert(Capacity > 0, "FixedBuffer requires Capacity > 0");
 
  public:
-  typedef T value_type;
-  typedef T* iterator;
-  typedef const T* const_iterator;
+  using value_type = T;
+  using iterator = T*;
+  using const_iterator = const T*;
 
   FixedBuffer() noexcept : size_(0) {}
 
