@@ -3,11 +3,16 @@
 #ifndef CYF_FIFO_H_
 #define CYF_FIFO_H_
 
-#include <algorithm>
+#if defined(__AVR__)
+#include <assert.h>
+#include <stddef.h>
+#include <string.h>
+#else
 #include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
+#endif
 
 namespace cyf {
 
@@ -16,7 +21,9 @@ namespace cyf {
 // additions on top of it.
 template <typename T>
 class FifoCore {
+#if !defined(__AVR__)
   static_assert(std::is_trivially_copyable<T>::value, "FifoCore requires trivially copyable type");
+#endif
 
  public:
   constexpr explicit FifoCore(T* buffer, size_t buffer_size) noexcept : buffer_(buffer), max_size_(buffer_size - 1) {
@@ -154,10 +161,11 @@ class FifoCore {
       return 0;
     }
 
-    const size_t first_chunk = std::min(count, max_size_ + 1 - write_pos_);
-    std::memcpy(buffer_ + write_pos_, data, first_chunk * sizeof(T));
+    const size_t to_end = max_size_ + 1 - write_pos_;
+    const size_t first_chunk = (count < to_end) ? count : to_end;
+    memcpy(buffer_ + write_pos_, data, first_chunk * sizeof(T));
     if (count > first_chunk) {
-      std::memcpy(buffer_, data + first_chunk, (count - first_chunk) * sizeof(T));
+      memcpy(buffer_, data + first_chunk, (count - first_chunk) * sizeof(T));
     }
 
     write_pos_ = (write_pos_ + count) & max_size_;
@@ -166,10 +174,11 @@ class FifoCore {
 
   // Copies count elements starting at read_pos_ without advancing it.
   size_t ReadBlock(T* dest, size_t count) const noexcept {
-    const size_t first_chunk = std::min(count, max_size_ + 1 - read_pos_);
-    std::memcpy(dest, buffer_ + read_pos_, first_chunk * sizeof(T));
+    const size_t to_end = max_size_ + 1 - read_pos_;
+    const size_t first_chunk = (count < to_end) ? count : to_end;
+    memcpy(dest, buffer_ + read_pos_, first_chunk * sizeof(T));
     if (count > first_chunk) {
-      std::memcpy(dest + first_chunk, buffer_, (count - first_chunk) * sizeof(T));
+      memcpy(dest + first_chunk, buffer_, (count - first_chunk) * sizeof(T));
     }
     return count;
   }

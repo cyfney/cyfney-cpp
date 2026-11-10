@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef CYF_LOG_H
-#define CYF_LOG_H
+#ifndef CYF_LOG_H_
+#define CYF_LOG_H_
 
 #define CYF_LOG_SEVERITY_VERBOSE (1)
 #define CYF_LOG_SEVERITY_DEBUG (2)
@@ -20,6 +20,7 @@
 
 #if defined(ARDUINO_ARCH_AVR)
 #include <assert.h>
+#include <avr/pgmspace.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -70,7 +71,7 @@ inline void set_log_sink(LogSink sink) noexcept {
 
 inline size_t& format_buffer_size() noexcept {
 #if defined(ARDUINO_ARCH_AVR)
-  static size_t s_format_buffer_size = 128;  // Default buffer size
+  static size_t s_format_buffer_size = 256;  // Default buffer size
 #else
   static size_t s_format_buffer_size = 512;  // Default buffer size
 #endif
@@ -131,7 +132,14 @@ inline void Log(const char* fmt, ...) noexcept {
 
   va_list args;
   va_start(args, fmt);
+#if defined(ARDUINO_ARCH_AVR)
+  // On AVR fmt lives in flash (the CLOGx macros pass it via PSTR); %s
+  // arguments still point to RAM. This halves RAM use: literals would
+  // otherwise be copied to RAM at startup.
+  auto length = vsnprintf_P(buffer + kTimestampSize, sizeof(buffer) - kTimestampSize, fmt, args) + kTimestampSize;
+#else
   auto length = vsnprintf(buffer + kTimestampSize, sizeof(buffer) - kTimestampSize, fmt, args) + kTimestampSize;
+#endif
   va_end(args);
 
   if (length >= sizeof(buffer)) {
@@ -154,42 +162,47 @@ inline void Log(const char* fmt, ...) noexcept {
 }  // namespace log
 }  // namespace cyf
 
+// Shared implementation for the CLOGx macros. On AVR the whole format string
+// (prefix + user fmt) goes to flash via PSTR, and __FILE__ too; otherwise
+// plain RAM literals are used. Note: vsnprintf_P only reads the format string
+// from flash — %s arguments must still point to RAM — so the flash-resident
+// file name is passed with %S (avr-libc: string located in program memory).
+#if defined(ARDUINO_ARCH_AVR)
+#define CYF_LOG_IMPL(prefix, fmt, ...)                                                                                     \
+  cyf::log::Log(PSTR(prefix " %S:%d %s] " fmt "\n"), PSTR(__FILE__) + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, \
+                __FUNCTION__, ##__VA_ARGS__)
+#else
+#define CYF_LOG_IMPL(prefix, fmt, ...)                                                                         \
+  cyf::log::Log(prefix " %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, \
+                __FUNCTION__, ##__VA_ARGS__)
+#endif
+
 #if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_VERBOSE
-#define CLOGV(fmt, ...)                                                                                                 \
-  cyf::log::Log(" V %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
-                ##__VA_ARGS__)
+#define CLOGV(fmt, ...) CYF_LOG_IMPL("V", fmt, ##__VA_ARGS__)
 #else
 #define CLOGV(fmt, ...) (void(0))
 #endif
 
 #if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_DEBUG
-#define CLOGD(fmt, ...)                                                                                                 \
-  cyf::log::Log(" D %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
-                ##__VA_ARGS__)
+#define CLOGD(fmt, ...) CYF_LOG_IMPL("D", fmt, ##__VA_ARGS__)
 #else
 #define CLOGD(fmt, ...) (void(0))
 #endif
 
 #if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_INFO
-#define CLOGI(fmt, ...)                                                                                                 \
-  cyf::log::Log(" I %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
-                ##__VA_ARGS__)
+#define CLOGI(fmt, ...) CYF_LOG_IMPL("I", fmt, ##__VA_ARGS__)
 #else
 #define CLOGI(fmt, ...) (void(0))
 #endif
 
 #if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_WARN
-#define CLOGW(fmt, ...)                                                                                                 \
-  cyf::log::Log(" W %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
-                ##__VA_ARGS__)
+#define CLOGW(fmt, ...) CYF_LOG_IMPL("W", fmt, ##__VA_ARGS__)
 #else
 #define CLOGW(fmt, ...) (void(0))
 #endif
 
 #if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_ERROR
-#define CLOGE(fmt, ...)                                                                                                 \
-  cyf::log::Log(" E %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, __FUNCTION__, \
-                ##__VA_ARGS__)
+#define CLOGE(fmt, ...) CYF_LOG_IMPL("E", fmt, ##__VA_ARGS__)
 #else
 #define CLOGE(fmt, ...) (void(0))
 #endif
