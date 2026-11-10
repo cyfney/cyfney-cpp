@@ -3,15 +3,17 @@
 #ifndef CYF_LOG_H_
 #define CYF_LOG_H_
 
-#define CYF_LOG_SEVERITY_VERBOSE (1)
-#define CYF_LOG_SEVERITY_DEBUG (2)
-#define CYF_LOG_SEVERITY_INFO (3)
-#define CYF_LOG_SEVERITY_WARN (4)
-#define CYF_LOG_SEVERITY_ERROR (5)
-#define CYF_LOG_SEVERITY_NONE (6)
+#define CYF_LOG_LEVEL_NONE (0)
+#define CYF_LOG_LEVEL_ERROR (1)
+#define CYF_LOG_LEVEL_WARN (2)
+#define CYF_LOG_LEVEL_INFO (3)
+#define CYF_LOG_LEVEL_DEBUG (4)
+#define CYF_LOG_LEVEL_VERBOSE (5)
 
-#ifndef CYF_LOG_SEVERITY
-#define CYF_LOG_SEVERITY (CYF_LOG_SEVERITY_INFO)
+// CYF_LOG_LEVEL = highest verbosity compiled into the binary.
+// NONE (0) disables all logging; higher values enable more CLOGx macros.
+#ifndef CYF_LOG_LEVEL
+#define CYF_LOG_LEVEL (CYF_LOG_LEVEL_INFO)
 #endif
 
 #if defined(ARDUINO) && !defined(ARDUINO_ARCH_ESP32)
@@ -177,34 +179,34 @@ inline void Log(const char* fmt, ...) noexcept {
                 __FUNCTION__, ##__VA_ARGS__)
 #endif
 
-#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_VERBOSE
-#define CLOGV(fmt, ...) CYF_LOG_IMPL("V", fmt, ##__VA_ARGS__)
+#if CYF_LOG_LEVEL_ERROR <= CYF_LOG_LEVEL
+#define CLOGE(fmt, ...) CYF_LOG_IMPL("E", fmt, ##__VA_ARGS__)
 #else
-#define CLOGV(fmt, ...) (void(0))
+#define CLOGE(fmt, ...) (void(0))
 #endif
 
-#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_DEBUG
-#define CLOGD(fmt, ...) CYF_LOG_IMPL("D", fmt, ##__VA_ARGS__)
-#else
-#define CLOGD(fmt, ...) (void(0))
-#endif
-
-#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_INFO
-#define CLOGI(fmt, ...) CYF_LOG_IMPL("I", fmt, ##__VA_ARGS__)
-#else
-#define CLOGI(fmt, ...) (void(0))
-#endif
-
-#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_WARN
+#if CYF_LOG_LEVEL_WARN <= CYF_LOG_LEVEL
 #define CLOGW(fmt, ...) CYF_LOG_IMPL("W", fmt, ##__VA_ARGS__)
 #else
 #define CLOGW(fmt, ...) (void(0))
 #endif
 
-#if CYF_LOG_SEVERITY <= CYF_LOG_SEVERITY_ERROR
-#define CLOGE(fmt, ...) CYF_LOG_IMPL("E", fmt, ##__VA_ARGS__)
+#if CYF_LOG_LEVEL_INFO <= CYF_LOG_LEVEL
+#define CLOGI(fmt, ...) CYF_LOG_IMPL("I", fmt, ##__VA_ARGS__)
 #else
-#define CLOGE(fmt, ...) (void(0))
+#define CLOGI(fmt, ...) (void(0))
+#endif
+
+#if CYF_LOG_LEVEL_DEBUG <= CYF_LOG_LEVEL
+#define CLOGD(fmt, ...) CYF_LOG_IMPL("D", fmt, ##__VA_ARGS__)
+#else
+#define CLOGD(fmt, ...) (void(0))
+#endif
+
+#if CYF_LOG_LEVEL_VERBOSE <= CYF_LOG_LEVEL
+#define CLOGV(fmt, ...) CYF_LOG_IMPL("V", fmt, ##__VA_ARGS__)
+#else
+#define CLOGV(fmt, ...) (void(0))
 #endif
 
 #endif
