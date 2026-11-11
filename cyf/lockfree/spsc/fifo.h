@@ -6,11 +6,13 @@
 #if defined(__AVR__)
 #include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #else
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <type_traits>
 #endif
@@ -106,9 +108,26 @@ class FifoCore {
   // Drops every item not yet consumed. MUST be called from the consumer task
   // (the only writer of out_): out_ is reset to the current in_, which always
   // keeps available >= 0, so it is safe against concurrent producer Push.
-  void Clear() noexcept { WriteOnce(out_, ReadOnce(in_)); }
+  void DiscardAll() noexcept { WriteOnce(out_, ReadOnce(in_)); }
 
-  // Next element to be popped. Consumer-side only (like Clear/Pop).
+  // Hands every item not yet consumed to f, then drops them all. Consumer-side
+  // only, same rule as DiscardAll. The element count is snapshotted up front, so
+  // a producer filling the FIFO while f runs is not affected. Returns the number
+  // of items passed to f; f must accept T& (e.g. a lambda or functor, no
+  // <functional> needed). No per-item copy is made.
+  template <typename F>
+  size_t ConsumeAll(F&& f) noexcept {
+    const FifoIndex begin = out_;
+    const FifoIndex end = ReadOnce(in_);
+    const FifoIndex available = end - begin;  // wrap in the index type (8-bit on AVR)
+    for (FifoIndex pos = begin; pos != end; ++pos) {
+      f(buffer_[pos & max_size_]);
+    }
+    WriteOnce(out_, end);
+    return static_cast<size_t>(available);
+  }
+
+  // Next element to be popped. Consumer-side only (like DiscardAll/Pop).
   T& front() noexcept { return buffer_[out_ & max_size_]; }
 
   const T& front() const noexcept { return buffer_[out_ & max_size_]; }

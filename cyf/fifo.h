@@ -16,9 +16,9 @@
 
 namespace cyf {
 
-// Single-threaded FIFO. The core API (Push/Pop/Clear) mirrors
-// cyf::lockfree::spsc::Fifo; extras (overwrite, peek, random access) are
-// additions on top of it.
+// Single-threaded FIFO. The core API (Push/Pop/ConsumeAll/DiscardAll) mirrors
+// cyf::lockfree::spsc::Fifo; extras (clear, consume, overwrite, peek, random
+// access) are additions on top of it.
 template <typename T>
 class FifoCore {
 #if !defined(__AVR__)
@@ -72,12 +72,30 @@ class FifoCore {
     return count;
   }
 
-  // Drops every item not yet consumed (same semantics as spsc Fifo::Clear).
-  void Clear() noexcept { write_pos_ = read_pos_; }
+  // Hands every item not yet consumed to f, then drops them all. Returns the
+  // number of items passed to f; f must accept T& (e.g. a lambda or functor, no
+  // <functional> needed). No per-item copy is made.
+  template <typename F>
+  size_t ConsumeAll(F&& f) noexcept {
+    const size_t available = count();
+    for (size_t i = 0; i < available; ++i) {
+      f(buffer_[(read_pos_ + i) & max_size_]);
+    }
+    read_pos_ = write_pos_;
+    return available;
+  }
+
+  // Drops every item not yet consumed without visiting it: alias of Clear(),
+  // under the name used by the spsc Fifo.
+  void DiscardAll() noexcept { Clear(); }
 
   // ------------------------------------------------------------------
   // Extras beyond the spsc API
   // ------------------------------------------------------------------
+
+  // Drops every item not yet consumed without visiting it (the spsc Fifo names
+  // this DiscardAll).
+  void Clear() noexcept { write_pos_ = read_pos_; }
 
   bool Push(const T& data, bool overwrite) noexcept { return 1 == Push(&data, 1, overwrite); }
 
