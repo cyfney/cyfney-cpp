@@ -170,12 +170,12 @@ inline void Log(const char* fmt, ...) noexcept {
 // from flash — %s arguments must still point to RAM — so the flash-resident
 // file name is passed with %S (avr-libc: string located in program memory).
 #if defined(ARDUINO_ARCH_AVR)
-#define CYF_LOG_IMPL(prefix, fmt, ...)                                                                                     \
-  cyf::log::Log(PSTR(prefix " %S:%d %s] " fmt "\n"), PSTR(__FILE__) + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, \
+#define CYF_LOG_IMPL(prefix, fmt, ...)                                                                                         \
+  cyf::log::Log(PSTR(" " prefix " %S:%d %s] " fmt "\n"), PSTR(__FILE__) + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, \
                 __FUNCTION__, ##__VA_ARGS__)
 #else
-#define CYF_LOG_IMPL(prefix, fmt, ...)                                                                         \
-  cyf::log::Log(prefix " %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, \
+#define CYF_LOG_IMPL(prefix, fmt, ...)                                                                             \
+  cyf::log::Log(" " prefix " %s:%d %s] " fmt "\n", __FILE__ + cyf::log::ExtractFileNameOffset(__FILE__), __LINE__, \
                 __FUNCTION__, ##__VA_ARGS__)
 #endif
 
