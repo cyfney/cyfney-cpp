@@ -39,13 +39,10 @@ class TimedMajorityFilter {
     }
   }
 
-  bool Flush(FrameType* out) { return Flush(getter_(), out); }
+  // Writes the winning value to out; returns false when no decision was reached.
+  bool Flush(FrameType& out) { return Flush(getter_(), out); }
 
-  bool Flush(TimeType now, FrameType* out) {
-    if (out == nullptr) {
-      return false;
-    }
-
+  bool Flush(TimeType now, FrameType& out) {
     if (entries_.empty()) {
       return false;
     }
@@ -74,7 +71,7 @@ class TimedMajorityFilter {
     entries_.Clear();
 
     if (has_best && (max_count >= min_count_) && (max_count > second_max)) {
-      *out = best;
+      out = best;
       return true;
     }
 

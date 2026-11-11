@@ -51,13 +51,13 @@ constexpr uint8_t kEscapeChar = 0xDB;
  */
 constexpr uint8_t kXorEscape = 0x20;
 
-inline void Escape(const uint8_t* data, size_t data_length, uint8_t* buffer, size_t* offset) {
+inline void Escape(const uint8_t* data, size_t data_length, uint8_t* buffer, size_t& offset) {
   for (size_t i = 0; i < data_length; ++i) {
     if (data[i] == kFrameHeader || data[i] == kFrameFooter || data[i] == kEscapeChar) {
-      buffer[(*offset)++] = kEscapeChar;
-      buffer[(*offset)++] = static_cast<uint8_t>(data[i] ^ kXorEscape);
+      buffer[offset++] = kEscapeChar;
+      buffer[offset++] = static_cast<uint8_t>(data[i] ^ kXorEscape);
     } else {
-      buffer[(*offset)++] = data[i];
+      buffer[offset++] = data[i];
     }
   }
 }
@@ -104,8 +104,8 @@ inline size_t Encode(const uint8_t* data, size_t length, uint8_t* out_buffer, si
   const uint8_t crc = crc8::Calculate(data, length);
 
   out_buffer[offset++] = detail::kFrameHeader;
-  detail::Escape(data, length, out_buffer, &offset);
-  detail::Escape(&crc, 1, out_buffer, &offset);
+  detail::Escape(data, length, out_buffer, offset);
+  detail::Escape(&crc, 1, out_buffer, offset);
   out_buffer[offset++] = detail::kFrameFooter;
   return offset;
 }
