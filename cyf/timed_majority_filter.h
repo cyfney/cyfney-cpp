@@ -20,11 +20,19 @@ namespace cyf {
 // - When more than MaxDistinct distinct values coexist, new distinct values
 //   are silently dropped.
 // - FrameType must be default-constructible and provide operator==.
+// - set_timeout()/set_min_count() change the values used by later Flush()
+//   calls. Valid values and required synchronization are the caller's job.
 template <typename FrameType, typename TimeType, typename TimeGetter, uint8_t MaxDistinct = 8>
 class TimedMajorityFilter {
  public:
   constexpr TimedMajorityFilter(TimeType timeout, TimeGetter getter, uint16_t min_count = 1)
       : timeout_(timeout), getter_(getter), min_count_(min_count) {}
+
+  // Sets the window length used by subsequent Flush() calls.
+  void set_timeout(TimeType timeout) noexcept { timeout_ = timeout; }
+
+  // Sets the minimum sample count needed for a decision.
+  void set_min_count(uint16_t min_count) noexcept { min_count_ = min_count; }
 
   void Push(const FrameType& frame) {
     for (size_t i = 0; i < entries_.size(); ++i) {
@@ -91,9 +99,9 @@ class TimedMajorityFilter {
     uint16_t count;
   };
 
-  const TimeType timeout_;
+  TimeType timeout_;
   const TimeGetter getter_;
-  const uint16_t min_count_;
+  uint16_t min_count_;
 
   TimeType last_time_ = TimeType{0};
   FixedBuffer<Entry, MaxDistinct> entries_;
