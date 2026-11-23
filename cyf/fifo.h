@@ -68,7 +68,7 @@ class FifoCore {
     }
 
     ReadBlock(dest, count);
-    read_pos_ = (read_pos_ + count) & max_size_;
+    out_ = (out_ + count) & max_size_;
     return count;
   }
 
@@ -79,9 +79,9 @@ class FifoCore {
   size_t ConsumeAll(F&& f) noexcept {
     const size_t available = count();
     for (size_t i = 0; i < available; ++i) {
-      f(buffer_[(read_pos_ + i) & max_size_]);
+      f(buffer_[(out_ + i) & max_size_]);
     }
-    read_pos_ = write_pos_;
+    out_ = in_;
     return available;
   }
 
@@ -95,7 +95,7 @@ class FifoCore {
 
   // Drops every item not yet consumed without visiting it (the spsc Fifo names
   // this DiscardAll).
-  void Clear() noexcept { write_pos_ = read_pos_; }
+  void Clear() noexcept { in_ = out_; }
 
   bool Push(const T& data, bool overwrite) noexcept { return 1 == Push(&data, 1, overwrite); }
 
@@ -111,14 +111,14 @@ class FifoCore {
     // If writing more data than the total buffer size,
     // discard all old data and keep only the last max_size_ elements.
     if (count > max_size_) {
-      read_pos_ = 0;
-      write_pos_ = 0;
+      out_ = 0;
+      in_ = 0;
       return WriteBlock(data + (count - max_size_), max_size_);
     }
 
     const size_t free_count = free();
     if (count > free_count) {
-      read_pos_ = (read_pos_ + (count - free_count)) & max_size_;
+      out_ = (out_ + (count - free_count)) & max_size_;
     }
     return WriteBlock(data, count);
   }
@@ -136,30 +136,30 @@ class FifoCore {
     return count > 0 ? ReadBlock(dest, count) : 0;
   }
 
-  const T& Peek(size_t index = 0) const noexcept { return buffer_[(read_pos_ + index) & max_size_]; }
+  const T& Peek(size_t index = 0) const noexcept { return buffer_[(out_ + index) & max_size_]; }
 
-  T& Peek(size_t index = 0) noexcept { return buffer_[(read_pos_ + index) & max_size_]; }
+  T& Peek(size_t index = 0) noexcept { return buffer_[(out_ + index) & max_size_]; }
 
-  T& front() noexcept { return buffer_[read_pos_]; }
+  T& front() noexcept { return buffer_[out_]; }
 
-  const T& front() const noexcept { return buffer_[read_pos_]; }
+  const T& front() const noexcept { return buffer_[out_]; }
 
-  T& operator[](size_t index) noexcept { return buffer_[(read_pos_ + index) & max_size_]; }
+  T& operator[](size_t index) noexcept { return buffer_[(out_ + index) & max_size_]; }
 
-  const T& operator[](size_t index) const noexcept { return buffer_[(read_pos_ + index) & max_size_]; }
+  const T& operator[](size_t index) const noexcept { return buffer_[(out_ + index) & max_size_]; }
 
   // Moves the read pointer forward without copying (useful for DMA).
-  void Consume(size_t count = 1) noexcept { read_pos_ = (read_pos_ + count) & max_size_; }
+  void Consume(size_t count = 1) noexcept { out_ = (out_ + count) & max_size_; }
 
   // ------------------------------------------------------------------
   // Queries
   // ------------------------------------------------------------------
 
-  bool empty() const noexcept { return read_pos_ == write_pos_; }
+  bool empty() const noexcept { return out_ == in_; }
 
   bool full() const noexcept { return count() == max_size_; }
 
-  size_t count() const noexcept { return (write_pos_ - read_pos_) & max_size_; }
+  size_t count() const noexcept { return (in_ - out_) & max_size_; }
 
   /**
    * The maximum number of elements that can be stored in the buffer
@@ -179,22 +179,22 @@ class FifoCore {
       return 0;
     }
 
-    const size_t to_end = max_size_ + 1 - write_pos_;
+    const size_t to_end = max_size_ + 1 - in_;
     const size_t first_chunk = (count < to_end) ? count : to_end;
-    memcpy(buffer_ + write_pos_, data, first_chunk * sizeof(T));
+    memcpy(buffer_ + in_, data, first_chunk * sizeof(T));
     if (count > first_chunk) {
       memcpy(buffer_, data + first_chunk, (count - first_chunk) * sizeof(T));
     }
 
-    write_pos_ = (write_pos_ + count) & max_size_;
+    in_ = (in_ + count) & max_size_;
     return count;
   }
 
-  // Copies count elements starting at read_pos_ without advancing it.
+  // Copies count elements starting at out_ without advancing it.
   size_t ReadBlock(T* dest, size_t count) const noexcept {
-    const size_t to_end = max_size_ + 1 - read_pos_;
+    const size_t to_end = max_size_ + 1 - out_;
     const size_t first_chunk = (count < to_end) ? count : to_end;
-    memcpy(dest, buffer_ + read_pos_, first_chunk * sizeof(T));
+    memcpy(dest, buffer_ + out_, first_chunk * sizeof(T));
     if (count > first_chunk) {
       memcpy(dest + first_chunk, buffer_, (count - first_chunk) * sizeof(T));
     }
@@ -203,8 +203,8 @@ class FifoCore {
 
   T* const buffer_ = nullptr;
   const size_t max_size_ = 0;
-  size_t read_pos_ = 0;
-  size_t write_pos_ = 0;
+  size_t in_ = 0;
+  size_t out_ = 0;
 };
 
 template <typename T, size_t N>
