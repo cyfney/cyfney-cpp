@@ -7,8 +7,8 @@
 //
 // Output routing (first match wins):
 //   1. user sink installed via set_log_sink()
-//   2. platform default: ESP32 -> stdout, Arduino -> Serial,
-//      bare metal -> write() (i.e. the project's _write() retarget)
+//   2. platform default: AVR Arduino -> Serial, otherwise write() to
+//      STDOUT_FILENO (the platform's _write() retarget)
 //
 // Time source: set_millis_source() on bare metal, millis() on Arduino,
 // pdTICKS_TO_MS(xTaskGetTickCount()) on ESP32. Timestamps cover up to
@@ -45,8 +45,8 @@
 #include <cstdio>
 #endif
 
-#if !defined(ARDUINO)
-#include <unistd.h>  // write() for the bare-metal default sink
+#if !defined(ARDUINO_ARCH_AVR)
+#include <unistd.h>  // write() for the default sink (bare metal and ESP32)
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -173,14 +173,12 @@ inline void Log(const char* fmt, ...) noexcept {
   if (log_sink()) {
     log_sink()(buffer, length);
   } else {
-#if defined(ARDUINO_ARCH_ESP32)
-    fwrite(buffer, 1, length, stdout);
-#elif defined(ARDUINO)
+#if defined(ARDUINO_ARCH_AVR)
     Serial.write(buffer, length);
 #else
-    // Bare metal: write() goes straight to the _write() retarget, bypassing
-    // the newlib FILE layer (fwrite pulls in extra code, stack usage and a
-    // malloc'ed stdout buffer).
+    // write() goes straight to the _write() retarget, bypassing the newlib
+    // FILE layer (fwrite pulls in extra code, stack usage and a malloc'ed
+    // stdout buffer). On ESP32 this reaches UART0 via the core's VFS layer.
     write(STDOUT_FILENO, buffer, length);
 #endif
   }
