@@ -3,6 +3,20 @@
 #ifndef CYF_LOG_H_
 #define CYF_LOG_H_
 
+// Lightweight printf-style logging with millisecond timestamps.
+//
+// Output routing (first match wins):
+//   1. user sink installed via set_log_sink()
+//   2. platform default: ESP32 -> stdout, Arduino -> Serial,
+//      bare metal -> write() (i.e. the project's _write() retarget)
+//
+// Time source: set_millis_source() on bare metal, millis() on Arduino,
+// pdTICKS_TO_MS(xTaskGetTickCount()) on ESP32. Timestamps cover up to
+// 2^28 ms (~74.9 h) and render as "HH.MM.SS.mmm".
+//
+// Verbosity is compile-time: CYF_LOG_LEVEL selects the highest enabled
+// level; CLOGx macros below it expand to nothing.
+
 #define CYF_LOG_LEVEL_NONE (0)
 #define CYF_LOG_LEVEL_ERROR (1)
 #define CYF_LOG_LEVEL_WARN (2)
@@ -21,16 +35,18 @@
 #endif
 
 #if defined(ARDUINO_ARCH_AVR)
-#include <assert.h>
 #include <avr/pgmspace.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #else
-#include <cassert>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
+#endif
+
+#if !defined(ARDUINO)
+#include <unistd.h>  // write() for the bare-metal default sink
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -55,7 +71,6 @@ inline MillisSource& millis_source() noexcept {
 }
 
 inline void set_millis_source(MillisSource source) noexcept {
-  assert(millis_source() == nullptr);  // Ensure it's set only once
   millis_source() = source;
 }
 
@@ -67,26 +82,26 @@ inline LogSink& log_sink() noexcept {
 }
 
 inline void set_log_sink(LogSink sink) noexcept {
-  assert(log_sink() == nullptr);  // Ensure it's set only once
   log_sink() = sink;
 }
 
 inline size_t& format_buffer_size() noexcept {
 #if defined(ARDUINO_ARCH_AVR)
-  static size_t s_format_buffer_size = 256;  // Default buffer size
+  static size_t s_format_buffer_size = 256;  // RAM-constrained default
 #else
-  static size_t s_format_buffer_size = 512;  // Default buffer size
+  static size_t s_format_buffer_size = 512;
 #endif
   return s_format_buffer_size;
 }
 
 inline void set_format_buffer_size(size_t size) noexcept {
-  assert(size > 0);  // Ensure the buffer size is within a reasonable range
   format_buffer_size() = size;
 }
 
 inline void FormatTimestamp(char* buffer) noexcept {
   constexpr int kShiftBits = 28;
+  // Two-digit hours require uptime < 2^28 ms; kShiftBits must not exceed 28.
+  static_assert(kShiftBits <= 28, "two-digit hours requires kShiftBits <= 28");
   constexpr uint32_t kTimeMask = (uint32_t{1} << kShiftBits) - 1;
 
   const uint32_t raw_millis = millis_source() ? millis_source()() :
@@ -99,32 +114,38 @@ inline void FormatTimestamp(char* buffer) noexcept {
 #endif
       ;
 
-  const uint32_t milliseconds_in_range = raw_millis & kTimeMask;
+  // Constant-multiplication division: floor(x/d) == (x * ceil(2^32/d)) >> 32,
+  // exact over the entire masked input range. Remainders are derived by
+  // subtracting the scaled quotient, so no runtime division or modulo is
+  // needed — relevant on cores without a hardware divider.
+  const uint32_t x = raw_millis & kTimeMask;
 
-  const uint32_t milliseconds = milliseconds_in_range % 1000;
-  const uint32_t total_seconds = milliseconds_in_range / 1000;
+  const uint32_t total_seconds = static_cast<uint32_t>(((uint64_t)(x >> 3) * 34359739ULL) >> 32);       // x/1000 = (x/8)/125
+  const uint32_t total_minutes = static_cast<uint32_t>(((uint64_t)total_seconds * 71582789ULL) >> 32);  // /60
+  const uint32_t hours = static_cast<uint32_t>(((uint64_t)total_minutes * 71582789ULL) >> 32);          // /60
 
-  const uint32_t seconds = total_seconds % 60;
-  const uint32_t total_minutes = total_seconds / 60;
+  const uint32_t milliseconds = x - 1000 * total_seconds;
+  const uint32_t seconds = total_seconds - 60 * total_minutes;
+  const uint32_t minutes = total_minutes - 60 * hours;
 
-  const uint32_t minutes = total_minutes % 60;
-  const uint32_t hours = total_minutes / 60;
-
-  buffer[0] = '0' + hours / 10;
-  buffer[1] = '0' + hours % 10;
+  // Two-digit split (n < 100): tens = (n * 205) >> 11 == n / 10.
+  const auto write_two = [buffer](uint32_t pos, uint32_t n) {
+    const uint32_t tens = (n * 205) >> 11;
+    buffer[pos] = static_cast<char>('0' + tens);
+    buffer[pos + 1] = static_cast<char>('0' + n - 10 * tens);
+  };
+  write_two(0, hours);
   buffer[2] = '.';
-
-  buffer[3] = '0' + minutes / 10;
-  buffer[4] = '0' + minutes % 10;
+  write_two(3, minutes);
   buffer[5] = '.';
-
-  buffer[6] = '0' + seconds / 10;
-  buffer[7] = '0' + seconds % 10;
+  write_two(6, seconds);
   buffer[8] = '.';
 
-  buffer[9] = '0' + milliseconds / 100;
-  buffer[10] = '0' + (milliseconds / 10) % 10;
-  buffer[11] = '0' + milliseconds % 10;
+  const uint32_t ms_tens = (milliseconds * 205) >> 11;      // ms / 10
+  const uint32_t ms_hundreds = (ms_tens * 205) >> 11;       // ms / 100
+  buffer[9] = static_cast<char>('0' + ms_hundreds);
+  buffer[10] = static_cast<char>('0' + ms_tens - 10 * ms_hundreds);
+  buffer[11] = static_cast<char>('0' + milliseconds - 10 * ms_tens);
 }
 
 inline void Log(const char* fmt, ...) noexcept {
@@ -157,7 +178,10 @@ inline void Log(const char* fmt, ...) noexcept {
 #elif defined(ARDUINO)
     Serial.write(buffer, length);
 #else
-    fwrite(buffer, 1, length, stdout);
+    // Bare metal: write() goes straight to the _write() retarget, bypassing
+    // the newlib FILE layer (fwrite pulls in extra code, stack usage and a
+    // malloc'ed stdout buffer).
+    write(STDOUT_FILENO, buffer, length);
 #endif
   }
 }
